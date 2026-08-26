@@ -1,0 +1,15 @@
+# Contains cluster credentials - never commit
+AGENT.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local env/secrets
+.env
+*.local.yaml
+
+# Claude Code session-local state
+.claude/

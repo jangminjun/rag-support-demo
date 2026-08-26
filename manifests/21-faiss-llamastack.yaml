@@ -1,0 +1,53 @@
+# ② FAISS 트랙: 인라인(파드 내부 메모리) 벡터 검색.
+# ENABLE_FAISS=true 이면 provider_type: inline::faiss 가 vector_io API에 등록된다.
+# 참고: 이 데모의 전제였던 "SQLite 임베디드 백엔드(외부 DB 불필요)"는 RHOAI 3.1 이하 기준이며,
+# 3.2부터는 인라인 FAISS도 메타데이터 저장에 PostgreSQL이 필수로 바뀌었다. 그래서 이 트랙도
+# faiss-postgres를 둔다 — FAISS의 실제 차별점은 "벡터 인덱스 자체가 별도 벡터DB 파드 없이
+# llama-stack 파드 프로세스 메모리 안에서 동작한다"는 것이다(README 참고).
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: vs-faiss
+  namespace: rag-support-demo
+spec:
+  replicas: 1
+  server:
+    distribution:
+      name: rh-dev
+    containerSpec:
+      name: llama-stack
+      port: 8321
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: "1500m", memory: 3Gi}
+      env:
+        # 실제 추론은 호출하지 않는 더미 값 (01-inference-placeholder-secret.yaml 참고)
+        - name: INFERENCE_MODEL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: INFERENCE_MODEL}}
+        - name: VLLM_URL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: VLLM_URL}}
+        - name: VLLM_MAX_TOKENS
+          value: "2048"
+
+        - name: POSTGRES_HOST
+          value: "faiss-postgres.rag-support-demo.svc.cluster.local"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          valueFrom: {secretKeyRef: {name: faiss-postgres-credentials, key: POSTGRES_DB}}
+        - name: POSTGRES_USER
+          valueFrom: {secretKeyRef: {name: faiss-postgres-credentials, key: POSTGRES_USER}}
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: faiss-postgres-credentials, key: POSTGRES_PASSWORD}}
+
+        - name: ENABLE_SENTENCE_TRANSFORMERS
+          value: "true"
+        - name: EMBEDDING_PROVIDER
+          value: "sentence-transformers"
+
+        # ② FAISS 벡터 저장소 활성화
+        - name: ENABLE_FAISS
+          value: "true"
+
+        - name: FMS_ORCHESTRATOR_URL
+          value: "http://localhost"

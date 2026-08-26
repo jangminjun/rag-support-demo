@@ -1,0 +1,74 @@
+# FAISS 트랙용 메타데이터 PostgreSQL. pgvector 확장은 필요 없다 — 벡터 인덱스 자체는
+# FAISS가 llama-stack 파드 프로세스 메모리 안에서 관리하고, 이 Postgres는 파일/청크 메타데이터,
+# kvstore, agents 등의 부가 상태만 저장한다 (RHOAI 3.2+부터 인라인 FAISS도 이 Postgres가 필수).
+# 이미지는 이 클러스터의 ogx-rag-demo에서 검증된 것과 동일하게 맞춘다(docker.io pull 확인됨).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: faiss-postgres-credentials
+  namespace: rag-support-demo
+type: Opaque
+stringData:
+  POSTGRES_DB: "llamastack"
+  POSTGRES_USER: "llamastack"
+  POSTGRES_PASSWORD: "faiss-demo-pw-c91e"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: faiss-postgres-data
+  namespace: rag-support-demo
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faiss-postgres
+  namespace: rag-support-demo
+  labels: {app: faiss-postgres, track: faiss}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: faiss-postgres}
+  template:
+    metadata:
+      labels: {app: faiss-postgres, track: faiss}
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef: {name: faiss-postgres-credentials}
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 1Gi}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "llamastack"]}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: faiss-postgres-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: faiss-postgres
+  namespace: rag-support-demo
+spec:
+  selector: {app: faiss-postgres}
+  ports:
+    - port: 5432
+      targetPort: 5432

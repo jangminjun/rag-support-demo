@@ -1,0 +1,72 @@
+# Qdrant 트랙의 llama-stack 메타데이터(kvstore/sql) 저장소. Qdrant 자체는 벡터만 저장하고
+# 파일/청크 메타데이터는 다른 두 트랙과 동일하게 Postgres가 필요하다.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: qdrant-postgres-credentials
+  namespace: rag-support-demo
+type: Opaque
+stringData:
+  POSTGRES_DB: "llamastack"
+  POSTGRES_USER: "llamastack"
+  POSTGRES_PASSWORD: "qdrant-demo-pw-71ba"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-postgres-data
+  namespace: rag-support-demo
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant-postgres
+  namespace: rag-support-demo
+  labels: {app: qdrant-postgres, track: qdrant}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: qdrant-postgres}
+  template:
+    metadata:
+      labels: {app: qdrant-postgres, track: qdrant}
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef: {name: qdrant-postgres-credentials}
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 1Gi}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "llamastack"]}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: qdrant-postgres-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-postgres
+  namespace: rag-support-demo
+spec:
+  selector: {app: qdrant-postgres}
+  ports:
+    - port: 5432
+      targetPort: 5432

@@ -1,0 +1,58 @@
+# ③ Qdrant 트랙: RHOAI 3.4 신규 Technology Preview. remote::qdrant provider가
+# OpenAI 호환 Vector Stores API에 하이브리드(vector+keyword) 검색과 키워드 전용 검색을 추가로 노출한다.
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: vs-qdrant
+  namespace: rag-support-demo
+spec:
+  replicas: 1
+  server:
+    distribution:
+      name: rh-dev
+    containerSpec:
+      name: llama-stack
+      port: 8321
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: "1500m", memory: 3Gi}
+      env:
+        # 실제 추론은 호출하지 않는 더미 값 (01-inference-placeholder-secret.yaml 참고)
+        - name: INFERENCE_MODEL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: INFERENCE_MODEL}}
+        - name: VLLM_URL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: VLLM_URL}}
+        - name: VLLM_MAX_TOKENS
+          value: "2048"
+
+        - name: POSTGRES_HOST
+          value: "qdrant-postgres.rag-support-demo.svc.cluster.local"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          valueFrom: {secretKeyRef: {name: qdrant-postgres-credentials, key: POSTGRES_DB}}
+        - name: POSTGRES_USER
+          valueFrom: {secretKeyRef: {name: qdrant-postgres-credentials, key: POSTGRES_USER}}
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: qdrant-postgres-credentials, key: POSTGRES_PASSWORD}}
+
+        - name: ENABLE_SENTENCE_TRANSFORMERS
+          value: "true"
+        - name: EMBEDDING_PROVIDER
+          value: "sentence-transformers"
+
+        # ③ Qdrant 벡터 저장소 활성화 (remote-only, Technology Preview)
+        # 주의 1: 서비스 이름이 "qdrant"이면 쿠버네티스가 자동으로 QDRANT_PORT=tcp://<ip>:6333 형태의
+        # Docker-links 스타일 환경변수를 주입해 run.yaml의 ${env.QDRANT_PORT}(정수 기대)와 충돌하므로
+        # 명시적으로 덮어써야 한다.
+        # 주의 2: QDRANT_HOST를 같이 넣으면 qdrant_client가 "Only one of location/url/host/path"
+        # 오류를 낸다(내부적으로 url 기본값과 동시에 잡힘) — URL 방식 하나만 사용한다.
+        - name: ENABLE_QDRANT
+          value: "true"
+        - name: QDRANT_URL
+          value: "http://qdrant.rag-support-demo.svc.cluster.local:6333"
+        - name: QDRANT_PORT
+          value: "6333"
+
+        - name: FMS_ORCHESTRATOR_URL
+          value: "http://localhost"

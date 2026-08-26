@@ -1,0 +1,62 @@
+# ① pgvector 트랙: PostgreSQL + pgvector 확장을 원격 벡터 저장소로 사용.
+# ENABLE_PGVECTOR=true 이면 provider_type: remote::pgvector 가 vector_io API에 등록된다.
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: vs-pgvector
+  namespace: rag-support-demo
+spec:
+  replicas: 1
+  server:
+    distribution:
+      name: rh-dev
+    containerSpec:
+      name: llama-stack
+      port: 8321
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: "1500m", memory: 3Gi}
+      env:
+        # 실제 추론은 호출하지 않는 더미 값 (01-inference-placeholder-secret.yaml 참고)
+        - name: INFERENCE_MODEL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: INFERENCE_MODEL}}
+        - name: VLLM_URL
+          valueFrom: {secretKeyRef: {name: inference-model-secret, key: VLLM_URL}}
+        - name: VLLM_MAX_TOKENS
+          value: "2048"
+
+        # llama-stack 메타데이터(kvstore/sql) 저장소 — 3.2+부터 필수
+        - name: POSTGRES_HOST
+          value: "pgvector-postgres.rag-support-demo.svc.cluster.local"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_DB}}
+        - name: POSTGRES_USER
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_USER}}
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_PASSWORD}}
+
+        # 인라인 임베딩 (sentence-transformers) — 3개 트랙 공통, 임베딩 모델을 동일하게 맞춰
+        # 벡터 저장소 종류만 변수로 남긴다.
+        - name: ENABLE_SENTENCE_TRANSFORMERS
+          value: "true"
+        - name: EMBEDDING_PROVIDER
+          value: "sentence-transformers"
+
+        # ① pgvector 벡터 저장소 활성화 — 메타데이터와 동일한 Postgres 인스턴스를 재사용
+        - name: ENABLE_PGVECTOR
+          value: "true"
+        - name: PGVECTOR_HOST
+          value: "pgvector-postgres.rag-support-demo.svc.cluster.local"
+        - name: PGVECTOR_PORT
+          value: "5432"
+        - name: PGVECTOR_DB
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_DB}}
+        - name: PGVECTOR_USER
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_USER}}
+        - name: PGVECTOR_PASSWORD
+          valueFrom: {secretKeyRef: {name: pgvector-postgres-credentials, key: POSTGRES_PASSWORD}}
+
+        - name: FMS_ORCHESTRATOR_URL
+          value: "http://localhost"
