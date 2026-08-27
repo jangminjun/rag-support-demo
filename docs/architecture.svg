@@ -105,9 +105,12 @@
     <circle cx="1050" cy="340" r="3" fill="var(--neutral-accent)" />
     <line x1="1050" y1="340" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
 
-    <!-- Llama Stack layer: one grouping container around all three server boxes -->
-    <rect x="10" y="326" width="1140" height="166" rx="14" fill="none" stroke="var(--neutral-accent)" stroke-width="1.5" stroke-dasharray="6 5" />
-    <text x="26" y="344" font-size="10" font-weight="700" letter-spacing="0.04em" fill="var(--neutral-accent)">LLAMA STACK</text>
+    <!-- Llama Stack layer: one grouping container around all three server boxes.
+         The label sits on the border like a <fieldset><legend> — a background-colored patch is
+         painted over the dashed line first, then the text on top of that. -->
+    <rect x="10" y="328" width="1140" height="158" rx="14" fill="none" stroke="var(--neutral-accent)" stroke-width="1.5" stroke-dasharray="6 5" />
+    <rect x="18" y="320" width="90" height="16" fill="var(--bg)" />
+    <text x="24" y="332" font-size="10" font-weight="700" letter-spacing="0.04em" fill="var(--neutral-accent)">LLAMA STACK</text>
 
     <!-- ============ Column 1: pgvector ============ -->
     <text x="20" y="252" font-weight="700" fill="var(--track-pgvector)">① pgvector</text>
@@ -119,7 +122,7 @@
     <text x="195" y="396" text-anchor="middle" font-size="10.5" class="sub">inference → remote::vllm (아래 qwen-vllm)</text>
 
     <line x1="195" y1="480" x2="195" y2="500" stroke="var(--track-pgvector)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--track-pgvector)" />
-    <text x="205" y="494" font-size="10.5" fill="var(--track-pgvector)">SQL</text>
+    <text x="205" y="498" font-size="10.5" fill="var(--track-pgvector)">SQL</text>
 
     <rect x="20" y="500" width="350" height="116" rx="8" fill="var(--track-pgvector-bg)" stroke="var(--track-pgvector)" stroke-width="1.5" />
     <text x="195" y="526" text-anchor="middle" font-weight="600">pgvector-postgres</text>
@@ -139,7 +142,7 @@
     <text x="575" y="442" text-anchor="middle" font-size="10" class="sub">파드 프로세스 내부 · 별도 벡터DB 파드 없음</text>
 
     <line x1="575" y1="480" x2="575" y2="500" stroke="var(--track-faiss)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--track-faiss)" />
-    <text x="585" y="494" font-size="10.5" fill="var(--track-faiss)">SQL</text>
+    <text x="585" y="498" font-size="10.5" fill="var(--track-faiss)">SQL</text>
 
     <rect x="400" y="500" width="350" height="60" rx="8" fill="var(--surface)" stroke="var(--track-faiss)" stroke-width="1.5" />
     <text x="575" y="524" text-anchor="middle" font-weight="600">faiss-postgres</text>
@@ -155,9 +158,9 @@
     <text x="955" y="396" text-anchor="middle" font-size="10.5" class="sub">inference → remote::vllm (아래 qwen-vllm)</text>
 
     <line x1="905" y1="480" x2="862" y2="505" stroke="var(--track-qdrant)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--track-qdrant)" />
-    <text x="820" y="496" font-size="10.5" fill="var(--track-qdrant)">SQL</text>
+    <text x="818" y="500" font-size="10.5" fill="var(--track-qdrant)">SQL</text>
     <line x1="1005" y1="480" x2="1048" y2="505" stroke="var(--track-qdrant)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--track-qdrant)" />
-    <text x="1010" y="496" font-size="10.5" fill="var(--track-qdrant)">:6333</text>
+    <text x="1052" y="492" font-size="10.5" fill="var(--track-qdrant)">:6333</text>
 
     <rect x="780" y="505" width="165" height="126" rx="8" fill="var(--surface)" stroke="var(--track-qdrant)" stroke-width="1.5" />
     <text x="862" y="529" text-anchor="middle" font-weight="600" font-size="11.5">qdrant-postgres</text>
