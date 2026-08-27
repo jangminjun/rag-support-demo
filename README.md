@@ -43,6 +43,23 @@ rag-support-demo (네임스페이스)
 세 트랙 모두 임베딩은 `ENABLE_SENTENCE_TRANSFORMERS=true` (인라인 sentence-transformers,
 `nomic-ai/nomic-embed-text-v1.5`)로 동일하게 맞춰서, **벡터 저장소 종류만 변수로 남깁니다.**
 
+전체 구조를 그림으로 보고 싶다면 [`docs/architecture.html`](docs/architecture.html) 참고
+(브라우저로 열면 됩니다) — 두 클라이언트(챗 UI/CLI)가 동일한 API로 세 트랙에 접근하는 흐름과
+트랙별 실제 리소스 이름을 다이어그램으로 정리해뒀습니다.
+
+### `distribution.name: rh-dev`란?
+
+세 `LlamaStackDistribution` CR 모두 `spec.server.distribution.name: rh-dev`를 씁니다. Llama Stack에서
+**distribution**은 "어떤 provider 조합을 켤지"를 미리 정해놓은 세트로, 이름을 지정하면 오퍼레이터가
+그에 맞는 컨테이너 이미지 + 미리 baked-in된 `run.yaml` 템플릿을 가져다 씁니다. `rh-dev`는 커뮤니티
+업스트림의 `starter` 배포판과 별개로, **Red Hat이 RHOAI용으로 직접 큐레이션·인증한 배포판**입니다
+(실제 이미지: `registry.redhat.io/rhoai/odh-llama-stack-core-rhel9`). 이 안에 inference(`remote::vllm`),
+safety(`remote::trustyai_fms`), eval(`remote::trustyai_lmeval`), tool_runtime(brave-search,
+tavily-search, MCP 등) provider가 이미 정의돼 있고, 우리는 그중 vector_io 관련 환경변수
+(`ENABLE_PGVECTOR`/`ENABLE_FAISS`/`ENABLE_QDRANT`)만 트랙별로 다르게 켠 것입니다. ("dev"가 정확히
+무엇을 뜻하는지는 공식 문서에서 명시적으로 밝히지 않아 확인된 사실은 아니며, RHOAI 3.4에서
+Llama Stack 자체가 아직 Technology Preview 단계인 것과 관련 있어 보인다는 정도의 추정입니다.)
+
 ### 왜 실제 LLM 추론(vLLM)을 쓰지 않나요?
 
 이 데모는 벡터 저장소(vector_io API — 문서 업로드/청킹/임베딩/검색)만 검증하며 채팅/생성은

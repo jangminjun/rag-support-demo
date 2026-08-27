@@ -1,0 +1,427 @@
+<title>벡터 저장소 3종 아키텍처</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --surface: #ffffff;
+    --surface-sunken: #eeece6;
+    --border: #e1dfd7;
+    --border-strong: #c9c6ba;
+    --text: #201f1c;
+    --text-secondary: #6b6862;
+    --neutral-accent: #545c66;
+    --track-pgvector: #35618f;
+    --track-faiss: #a8631f;
+    --track-qdrant: #833466;
+    --track-pgvector-bg: #35618f14;
+    --track-faiss-bg: #a8631f14;
+    --track-qdrant-bg: #83346614;
+    --code-bg: #eceae3;
+    --shadow: 0 1px 2px rgba(30, 28, 20, 0.06), 0 4px 14px rgba(30, 28, 20, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181b;
+      --surface: #1e2124;
+      --surface-sunken: #26292d;
+      --border: #33373c;
+      --border-strong: #454a51;
+      --text: #e9e7e1;
+      --text-secondary: #9a978f;
+      --neutral-accent: #a3aab3;
+      --track-pgvector: #83aed6;
+      --track-faiss: #e0a45c;
+      --track-qdrant: #d081b2;
+      --track-pgvector-bg: #83aed61c;
+      --track-faiss-bg: #e0a45c1c;
+      --track-qdrant-bg: #d081b21c;
+      --code-bg: #26292d;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b;
+    --surface: #1e2124;
+    --surface-sunken: #26292d;
+    --border: #33373c;
+    --border-strong: #454a51;
+    --text: #e9e7e1;
+    --text-secondary: #9a978f;
+    --neutral-accent: #a3aab3;
+    --track-pgvector: #83aed6;
+    --track-faiss: #e0a45c;
+    --track-qdrant: #d081b2;
+    --track-pgvector-bg: #83aed61c;
+    --track-faiss-bg: #e0a45c1c;
+    --track-qdrant-bg: #d081b21c;
+    --code-bg: #26292d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans KR", "Malgun Gothic", sans-serif;
+    line-height: 1.6;
+  }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  header.hero { margin-bottom: 36px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(24px, 3.4vw, 32px);
+    margin: 0 0 10px;
+    text-wrap: balance;
+    font-weight: 700;
+  }
+  .lede {
+    max-width: 66ch;
+    color: var(--text-secondary);
+    font-size: 15.5px;
+    margin: 0;
+  }
+  .lede code { color: var(--text); }
+
+  section { margin-top: 40px; }
+  h2 {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin: 0 0 16px;
+  }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .diagram-card svg { display: block; width: 100%; height: auto; min-width: 760px; }
+  figure { margin: 0; }
+  figcaption {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 80ch;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .line-sample { width: 22px; height: 0; border-top: 2px solid var(--neutral-accent); flex: none; }
+  .line-sample.dashed { border-top-style: dashed; }
+
+  .flow {
+    counter-reset: step;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+  }
+  .flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .flow li::before {
+    content: counter(step);
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 13px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+  }
+  .flow .step-body { padding-top: 5px; font-size: 14.5px; }
+  .flow .step-body strong { font-weight: 600; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 13.5px;
+  }
+  thead th {
+    text-align: left;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+    background: var(--surface-sunken);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .table-wrap { overflow-x: auto; border-radius: 12px; }
+  .table-wrap table { border-radius: 0; }
+
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  footer.note {
+    margin-top: 44px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <p class="eyebrow">rag-support-demo · rag-support-demo namespace</p>
+    <h1>벡터 저장소 3종 아키텍처</h1>
+    <p class="lede">
+      OpenShift AI 3.4의 Llama Stack이 <code>pgvector</code> / <code>FAISS</code> / <code>Qdrant</code>
+      세 벡터 저장소를 어떻게 같은 API 뒤에서 갈아끼우는지 보여주는 다이어그램입니다.
+      브라우저(챗 UI)와 CLI(데모 스크립트) 두 클라이언트가 완전히 동일한 호출로 세 백엔드에 접근합니다.
+    </p>
+  </header>
+
+  <section>
+    <h2>토폴로지</h2>
+    <div class="diagram-card">
+      <figure>
+        <svg viewBox="0 0 1160 610" role="img" aria-label="브라우저와 터미널 두 클라이언트가 동일한 llama-stack API를 거쳐 pgvector, FAISS, Qdrant 세 벡터 저장소 트랙에 각각 연결되는 구조. pgvector는 하나의 PostgreSQL 인스턴스에 메타데이터와 벡터를 함께 저장하고, FAISS는 벡터 인덱스가 파드 프로세스 내부에만 있어 별도 벡터DB가 없으며, Qdrant는 메타데이터용 PostgreSQL과 벡터 전용 Qdrant 엔진을 별도로 둔다.">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+            </marker>
+          </defs>
+
+          <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor" color="var(--text)">
+
+            <!-- Chain 1: Browser -->
+            <rect x="275" y="16" width="220" height="42" rx="8" fill="var(--surface)" stroke="var(--border-strong)" />
+            <text x="385" y="41" text-anchor="middle" font-weight="600">브라우저 (사용자)</text>
+
+            <line x1="385" y1="58" x2="385" y2="70" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <rect x="275" y="70" width="220" height="42" rx="8" fill="var(--surface)" stroke="var(--border-strong)" />
+            <text x="385" y="91" text-anchor="middle" font-size="11.5">Route · chat-ui</text>
+            <text x="385" y="106" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">edge TLS · 상시 노출</text>
+
+            <line x1="385" y1="112" x2="385" y2="126" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <rect x="265" y="126" width="240" height="50" rx="8" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.5" />
+            <text x="385" y="148" text-anchor="middle" font-weight="600">chat-ui</text>
+            <text x="385" y="164" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">Deployment + Service (FastAPI)</text>
+
+            <!-- Chain 2: Terminal -->
+            <rect x="655" y="16" width="200" height="42" rx="8" fill="var(--surface)" stroke="var(--border-strong)" />
+            <text x="755" y="41" text-anchor="middle" font-weight="600">터미널 (oc)</text>
+
+            <line x1="755" y1="58" x2="755" y2="70" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <rect x="635" y="70" width="240" height="50" rx="8" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.5" stroke-dasharray="5 4" />
+            <text x="755" y="92" text-anchor="middle" font-weight="600">Job · demo-runner</text>
+            <text x="755" y="107" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">1회성 실행 (ingest / demo_*.py)</text>
+
+            <!-- drops to bus -->
+            <line x1="385" y1="176" x2="385" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <line x1="755" y1="120" x2="755" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
+
+            <!-- bus -->
+            <line x1="195" y1="228" x2="955" y2="228" stroke="var(--neutral-accent)" stroke-width="2.5" />
+            <text x="575" y="217" text-anchor="middle" font-size="11.5" fill="var(--neutral-accent)" color="var(--neutral-accent)">동일 API · llama-stack vector_io (files / vector_stores.search)</text>
+
+            <circle cx="385" cy="228" r="3" fill="var(--neutral-accent)" />
+            <circle cx="755" cy="228" r="3" fill="var(--neutral-accent)" />
+
+            <!-- three arrows down from bus -->
+            <circle cx="195" cy="228" r="3" fill="var(--neutral-accent)" />
+            <line x1="195" y1="228" x2="195" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" />
+            <circle cx="575" cy="228" r="3" fill="var(--neutral-accent)" />
+            <line x1="575" y1="228" x2="575" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" />
+            <circle cx="955" cy="228" r="3" fill="var(--neutral-accent)" />
+            <line x1="955" y1="228" x2="955" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" />
+
+            <!-- ============ Column 1: pgvector ============ -->
+            <text x="20" y="252" font-weight="700" fill="var(--track-pgvector)" color="var(--track-pgvector)">① pgvector</text>
+            <text x="20" y="266" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">원격 · 트랜잭션 · HA 상속</text>
+
+            <rect x="20" y="340" width="350" height="64" rx="8" fill="var(--surface)" stroke="var(--track-pgvector)" stroke-width="1.5" />
+            <text x="195" y="366" text-anchor="middle" font-weight="600">vs-pgvector</text>
+            <text x="195" y="384" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">provider_type: remote::pgvector</text>
+
+            <line x1="195" y1="404" x2="195" y2="444" stroke="var(--track-pgvector)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="205" y="428" font-size="10.5" fill="var(--track-pgvector)" color="var(--track-pgvector)">SQL</text>
+
+            <rect x="20" y="444" width="350" height="116" rx="8" fill="var(--track-pgvector-bg)" stroke="var(--track-pgvector)" stroke-width="1.5" />
+            <text x="195" y="470" text-anchor="middle" font-weight="600">pgvector-postgres</text>
+            <text x="195" y="488" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">PostgreSQL 16 + pgvector 확장</text>
+            <text x="195" y="514" text-anchor="middle" font-size="10.5">메타데이터 테이블 + 벡터(vector) 테이블</text>
+            <text x="195" y="530" text-anchor="middle" font-size="10.5">— 같은 인스턴스 하나에 함께 저장</text>
+
+            <!-- ============ Column 2: FAISS ============ -->
+            <text x="400" y="252" font-weight="700" fill="var(--track-faiss)" color="var(--track-faiss)">② FAISS</text>
+            <text x="400" y="266" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">인라인 · 파드 내부 메모리</text>
+
+            <rect x="400" y="340" width="350" height="140" rx="8" fill="var(--surface)" stroke="var(--track-faiss)" stroke-width="1.5" />
+            <text x="575" y="366" text-anchor="middle" font-weight="600">vs-faiss</text>
+            <text x="575" y="384" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">provider_type: inline::faiss</text>
+            <rect x="420" y="400" width="310" height="64" rx="6" fill="var(--track-faiss-bg)" stroke="var(--track-faiss)" stroke-dasharray="4 3" />
+            <text x="575" y="426" text-anchor="middle" font-size="11">인메모리 FAISS 인덱스</text>
+            <text x="575" y="442" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">파드 프로세스 내부 · 별도 벡터DB 파드 없음</text>
+
+            <line x1="575" y1="480" x2="575" y2="500" stroke="var(--track-faiss)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="585" y="494" font-size="10.5" fill="var(--track-faiss)" color="var(--track-faiss)">SQL</text>
+
+            <rect x="400" y="500" width="350" height="60" rx="8" fill="var(--surface)" stroke="var(--track-faiss)" stroke-width="1.5" />
+            <text x="575" y="524" text-anchor="middle" font-weight="600">faiss-postgres</text>
+            <text x="575" y="542" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">메타데이터 전용 (3.2+부터 필수) · 벡터는 없음</text>
+
+            <!-- ============ Column 3: Qdrant ============ -->
+            <text x="780" y="252" font-weight="700" fill="var(--track-qdrant)" color="var(--track-qdrant)">③ Qdrant</text>
+            <text x="780" y="266" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">원격 · 3.4 신규 · Tech Preview</text>
+
+            <rect x="780" y="340" width="350" height="64" rx="8" fill="var(--surface)" stroke="var(--track-qdrant)" stroke-width="1.5" />
+            <text x="955" y="366" text-anchor="middle" font-weight="600">vs-qdrant</text>
+            <text x="955" y="384" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">provider_type: remote::qdrant</text>
+
+            <line x1="905" y1="404" x2="862" y2="434" stroke="var(--track-qdrant)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="820" y="422" font-size="10.5" fill="var(--track-qdrant)" color="var(--track-qdrant)">SQL</text>
+            <line x1="1005" y1="404" x2="1048" y2="434" stroke="var(--track-qdrant)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <text x="1010" y="422" font-size="10.5" fill="var(--track-qdrant)" color="var(--track-qdrant)">:6333</text>
+
+            <rect x="780" y="434" width="165" height="126" rx="8" fill="var(--surface)" stroke="var(--track-qdrant)" stroke-width="1.5" />
+            <text x="862" y="458" text-anchor="middle" font-weight="600" font-size="11.5">qdrant-postgres</text>
+            <text x="862" y="480" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">메타데이터</text>
+            <text x="862" y="494" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">전용</text>
+
+            <rect x="965" y="434" width="165" height="126" rx="8" fill="var(--track-qdrant-bg)" stroke="var(--track-qdrant)" stroke-width="1.5" />
+            <text x="1047" y="458" text-anchor="middle" font-weight="600" font-size="11.5">qdrant</text>
+            <text x="1047" y="478" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">벡터 + HNSW</text>
+            <text x="1047" y="500" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--track-qdrant)" color="var(--track-qdrant)">vector</text>
+            <text x="1047" y="514" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--track-qdrant)" color="var(--track-qdrant)">keyword</text>
+            <text x="1047" y="528" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--track-qdrant)" color="var(--track-qdrant)">hybrid</text>
+
+          </g>
+        </svg>
+        <figcaption>
+          같은 <code>llama_stack_client</code> 호출(<code>files.create</code>,
+          <code>vector_stores.files.create</code>, <code>vector_stores.search</code>)이 어느 트랙으로
+          가느냐만 배포 설정(<code>ENABLE_PGVECTOR</code> / <code>ENABLE_FAISS</code> /
+          <code>ENABLE_QDRANT</code>)으로 갈립니다. FAISS만 벡터 인덱스가 파드 내부에 있어 전용
+          벡터DB가 없고, Qdrant만 <code>search_mode</code>로 keyword·hybrid까지 지원합니다.
+          세 트랙 모두 <code>INFERENCE_MODEL</code>/<code>VLLM_URL</code>은 실제로 호출되지 않는
+          더미 값입니다(이 데모는 vector_io만 검증).
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="line-sample"></span> 상시 트래픽</div>
+      <div class="legend-item"><span class="line-sample dashed"></span> 1회성 Job 경로</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--track-pgvector)"></span> pgvector 트랙</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--track-faiss)"></span> FAISS 트랙</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--track-qdrant)"></span> Qdrant 트랙</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>요청 흐름 — 브라우저에서 질의 하나를 입력했을 때</h2>
+    <ol class="flow">
+      <li><div class="step-body"><strong>chat-ui</strong>가 <code>/api/search</code>로 질의를 받는다.</div></li>
+      <li><div class="step-body">같은 함수가 <strong>pgvector / FAISS / Qdrant</strong> 세 서비스에 동시에
+        <code>vector_stores.search(search_mode=...)</code>를 호출한다 — 코드는 세 트랙 모두 동일하다.</div></li>
+      <li><div class="step-body">각 트랙은 자기 백엔드에서 검색한다: pgvector는 SQL로,
+        FAISS는 파드 내부 인덱스에서, Qdrant는 자신의 엔진에서(요청한 모드가 vector면 벡터만,
+        keyword/hybrid면 어휘 점수까지 결합).</div></li>
+      <li><div class="step-body">세 결과를 카드 3개로 모아 브라우저에 반환한다 — Qdrant 카드는
+        vector/keyword/hybrid 탭을 눌러 같은 데이터를 다른 모드로 다시 볼 수 있다.</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>실제 리소스 이름</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>트랙</th>
+            <th class="mono">LlamaStackDistribution</th>
+            <th class="mono">provider_type</th>
+            <th>벡터 저장 위치</th>
+            <th>지원 search_mode</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="dot" style="background:var(--track-pgvector)"></span>① pgvector</td>
+            <td class="mono">vs-pgvector</td>
+            <td class="mono">remote::pgvector</td>
+            <td class="mono">pgvector-postgres:5432</td>
+            <td>vector</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--track-faiss)"></span>② FAISS</td>
+            <td class="mono">vs-faiss</td>
+            <td class="mono">inline::faiss</td>
+            <td>vs-faiss 파드 프로세스 내부</td>
+            <td>vector</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--track-qdrant)"></span>③ Qdrant</td>
+            <td class="mono">vs-qdrant</td>
+            <td class="mono">remote::qdrant</td>
+            <td class="mono">qdrant:6333</td>
+            <td>vector · keyword · hybrid</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="note">
+    네임스페이스 <code>rag-support-demo</code> · 매니페스트는 <code>manifests/</code>,
+    챗 UI는 <code>webapp/</code>, CLI 데모는 <code>scripts/</code>에 있습니다. 세부 배포 방법과
+    트러블슈팅 메모는 저장소 루트의 <code>README.md</code> 참고.
+  </footer>
+
+</div>
