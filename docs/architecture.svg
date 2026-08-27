@@ -79,7 +79,7 @@
 
     <!-- bus -->
     <line x1="195" y1="228" x2="955" y2="228" stroke="var(--neutral-accent)" stroke-width="2.5" />
-    <text x="575" y="217" text-anchor="middle" font-size="11.5" fill="var(--neutral-accent)">동일 API · llama-stack vector_io (files / vector_stores.search)</text>
+    <text x="575" y="217" text-anchor="middle" font-size="11.5" fill="var(--neutral-accent)">llama-stack API · vector_stores.search/files(공통) · chat.completions(chat-ui만)</text>
 
     <circle cx="385" cy="228" r="3" fill="var(--neutral-accent)" />
     <circle cx="755" cy="228" r="3" fill="var(--neutral-accent)" />
@@ -92,16 +92,18 @@
     <circle cx="955" cy="228" r="3" fill="var(--neutral-accent)" />
     <line x1="955" y1="228" x2="955" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" color="var(--neutral-accent)" />
 
-    <!-- Shared inference trunk (llama-stack pods → qwen-vllm) -->
-    <line x1="1050" y1="80" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+    <!-- Shared inference trunk: each llama-stack pod forwards internally to qwen-vllm
+         (direction is pod → qwen-vllm — the pod receives the client's chat.completions call
+         and is the one that calls out to qwen-vllm, not the reverse) -->
+    <line x1="1050" y1="298" x2="1050" y2="80" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
     <line x1="295" y1="298" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
-    <text x="675" y="289" text-anchor="middle" font-size="11" fill="var(--neutral-accent)">공용 추론 · OpenAI 호환 /v1/chat/completions</text>
-    <circle cx="295" cy="298" r="3" fill="var(--neutral-accent)" />
-    <line x1="295" y1="298" x2="295" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
-    <circle cx="675" cy="298" r="3" fill="var(--neutral-accent)" />
-    <line x1="675" y1="298" x2="675" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
-    <circle cx="1050" cy="298" r="3" fill="var(--neutral-accent)" />
-    <line x1="1050" y1="298" x2="1050" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
+    <text x="675" y="289" text-anchor="middle" font-size="11" fill="var(--neutral-accent)">각 파드 내부에서 qwen-vllm 호출 · OpenAI 호환 /v1/chat/completions</text>
+    <circle cx="295" cy="340" r="3" fill="var(--neutral-accent)" />
+    <line x1="295" y1="340" x2="295" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+    <circle cx="675" cy="340" r="3" fill="var(--neutral-accent)" />
+    <line x1="675" y1="340" x2="675" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+    <circle cx="1050" cy="340" r="3" fill="var(--neutral-accent)" />
+    <line x1="1050" y1="340" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
 
     <!-- Llama Stack layer: shared eyebrow label + matching dashed outline per pod (same server, different provider) -->
     <text x="575" y="318" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="0.03em" fill="var(--neutral-accent)">LLAMA STACK · rh-dev 배포판 — 아래 3개는 동일한 서버, provider만 다름</text>
