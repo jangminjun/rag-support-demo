@@ -115,6 +115,29 @@ cd scripts
 `shipping-fee-refund.md`(배송비 환불)는 "배송"이라는 키워드는 겹치지만 의미가 다르도록 의도적으로
 구성해, Qdrant의 키워드 검색과 의미 검색의 차이를 보여줍니다.
 
+## 브라우저 챗 UI
+
+CLI 스크립트 대신 브라우저에서 질의를 직접 입력하고 3개 트랙 결과를 나란히 비교하고 싶다면
+`webapp/`의 작은 FastAPI 앱을 배포합니다. `scripts/ingest.py`로 문서 적재가 끝난 상태여야 합니다.
+
+```bash
+cd webapp
+./deploy.sh
+```
+
+`deploy.sh`가 하는 일: 앱 코드를 ConfigMap으로 올리고, 3개 LlamaStackDistribution의 `serviceURL`을
+주입한 `Deployment` + `Service` + `Route`를 만듭니다(RHOAI 콘솔/Grafana와 같은 방식으로 공개
+URL을 얻습니다 — VPN 불필요, 일반 브라우저로 접속). 배포가 끝나면 URL을 출력합니다:
+
+```
+==> 완료: https://chat-ui-rag-support-demo.apps.myocp.sandbox623.opentlc.com
+```
+
+페이지에 질의를 입력하면 pgvector(vector 모드), FAISS(vector 모드), Qdrant(vector/keyword/hybrid
+탭 전환 가능) 결과를 카드 3개로 동시에 비교해서 보여줍니다. 백엔드는 `scripts/common.py`와 동일한
+로직(같은 이름 `support-docs-ko`의 vector store를 찾아 재사용, 임베딩 모델 자동 탐지)을
+`webapp/app.py`에 자체 포함하고 있습니다.
+
 ## 실행 결과 (2026-08-26, myocp 클러스터에서 실측)
 
 ### 적재 결과
@@ -199,6 +222,13 @@ default_chunk_size_tokens: 512`). 검색 정확도나 벡터 저장소 동작 �
 - **`Model 'None' not found`**: `vector_stores.create()`는 임베딩 모델을 자동으로 고르지 않습니다.
   `client.models.list()`로 `model_type == "embedding"`인 모델(`nomic-ai/nomic-embed-text-v1.5`)을
   찾아 `extra_body={"embedding_model": ...}`로 명시해야 합니다(`scripts/common.py` 참고).
+- **API 서버가 갑자기 통째로 응답 안 함(2026-08-27)**: `myocp`는 OpenTLC 샌드박스라 밤새 EC2
+  인스턴스가 전부 자동으로 `stopped` 됩니다(마스터/워커/GPU/bastion 전부). `aws ec2
+  describe-instances --profile ocp-sandbox3 --region us-east-1`로 상태 확인 후
+  `aws ec2 start-instances`로 재시작하면 되는데, 컨트롤플레인이 완전히 재기동해 `oc login`이
+  다시 성공하기까지 10분 넘게 걸릴 수 있습니다(그 사이엔 TLS handshake timeout → EOF → "must
+  provide credentials" 순으로 에러가 바뀌며 서서히 살아납니다). PVC 데이터는 EBS라 재시작해도
+  보존됩니다 — 실제로 이 데모의 적재된 문서 30건(3트랙×10건)도 그대로 남아 있었습니다.
 
 ## 클러스터 정리
 
