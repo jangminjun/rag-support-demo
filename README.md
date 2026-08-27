@@ -9,10 +9,7 @@ Red Hat OpenShift AI(RHOAI) 3.4의 Llama Stack이 지원하는 벡터 저장소 
 | ② | FAISS | `inline::faiss` | llama-stack 파드 프로세스 메모리 내부 인라인 검색 (CPU) |
 | ③ | Qdrant | `remote::qdrant` | RHOAI 3.4 신규(Technology Preview), 하이브리드(vector+keyword) 검색 + 키워드 전용 검색 |
 
-## 시작 전에: 원래 전제 중 정정된 부분
-
-이 데모를 설계하면서 공식 문서(RHOAI 3.4 "Working with Llama Stack")를 확인한 결과, 두 가지를
-정정했습니다.
+## Vector Store 특징
 
 1. **FAISS는 더 이상 "SQLite 임베디드 백엔드(외부 DB 불필요)"가 아닙니다.** 이는 RHOAI 3.1 이하
    기준입니다. **3.2부터는 인라인 FAISS도 파일/청크 메타데이터 저장에 PostgreSQL이 필수**로
@@ -24,6 +21,8 @@ Red Hat OpenShift AI(RHOAI) 3.4의 Llama Stack이 지원하는 벡터 저장소 
    3.4에서 Technology Preview 상태입니다.
 
 ## 아키텍처
+
+![벡터 저장소 3종 아키텍처 다이어그램](docs/architecture.svg)
 
 ```
 rag-support-demo (네임스페이스)
@@ -43,9 +42,8 @@ rag-support-demo (네임스페이스)
 세 트랙 모두 임베딩은 `ENABLE_SENTENCE_TRANSFORMERS=true` (인라인 sentence-transformers,
 `nomic-ai/nomic-embed-text-v1.5`)로 동일하게 맞춰서, **벡터 저장소 종류만 변수로 남깁니다.**
 
-전체 구조를 그림으로 보고 싶다면 [`docs/architecture.html`](docs/architecture.html) 참고
-(브라우저로 열면 됩니다) — 두 클라이언트(챗 UI/CLI)가 동일한 API로 세 트랙에 접근하는 흐름과
-트랙별 실제 리소스 이름을 다이어그램으로 정리해뒀습니다.
+위 다이어그램의 인터랙티브 버전(요청 흐름 설명, 리소스 이름 표 포함)은
+[`docs/architecture.html`](docs/architecture.html)에서 브라우저로 열어볼 수 있습니다.
 
 ### `distribution.name: rh-dev`란?
 
