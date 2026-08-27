@@ -1,0 +1,80 @@
+# 실제 RAG(검색+생성)를 위한 LLM 서빙. GPU 노드(g4dn.xlarge, Tesla T4 15GiB, time-slicing으로
+# nvidia.com/gpu 2 슬롯 노출되지만 물리 GPU는 1장)에 1 슬롯만 사용한다.
+# HF_HOME을 PVC로 돌려서 모델 가중치(~6GB)가 파드 재시작에도 남아있게 한다
+# (이 클러스터는 야간에 인스턴스가 꺼졌다 켜지므로 재다운로드를 피하기 위함).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qwen-vllm-cache
+  namespace: rag-support-demo
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen-vllm
+  namespace: rag-support-demo
+  labels: {app: qwen-vllm}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: qwen-vllm}
+  template:
+    metadata:
+      labels: {app: qwen-vllm}
+    spec:
+      tolerations:
+        - {key: "nvidia.com/gpu", operator: "Exists", effect: "NoSchedule"}
+      containers:
+        - name: vllm
+          image: docker.io/vllm/vllm-openai:latest
+          args:
+            - "--model"
+            - "Qwen/Qwen2.5-3B-Instruct"
+            - "--served-model-name"
+            - "qwen2.5-3b"
+            - "--max-model-len"
+            - "4096"
+            - "--gpu-memory-utilization"
+            - "0.85"
+            - "--port"
+            - "8000"
+          env:
+            # HOME이 없으면 vllm/flashinfer가 /.cache 아래에 쓰려다 권한 오류로 죽는다
+            # (OpenShift restricted SCC의 임의 비루트 UID는 / 에 쓸 수 없음).
+            - {name: HOME, value: /data/hf-cache}
+            - {name: HF_HOME, value: /data/hf-cache}
+          ports:
+            - {containerPort: 8000}
+          volumeMounts:
+            - {name: cache, mountPath: /data/hf-cache}
+            - {name: shm, mountPath: /dev/shm}
+          resources:
+            requests: {cpu: "2", memory: 8Gi, "nvidia.com/gpu": "1"}
+            limits: {cpu: "4", memory: 14Gi, "nvidia.com/gpu": "1"}
+          startupProbe:
+            httpGet: {path: /health, port: 8000}
+            failureThreshold: 60
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            periodSeconds: 10
+      volumes:
+        - name: cache
+          persistentVolumeClaim: {claimName: qwen-vllm-cache}
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 2Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen-vllm
+  namespace: rag-support-demo
+spec:
+  selector: {app: qwen-vllm}
+  ports:
+    - {port: 8000, targetPort: 8000}

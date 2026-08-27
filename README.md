@@ -11,12 +11,7 @@ Red Hat OpenShift AI(RHOAI) 3.4의 Llama Stack이 지원하는 벡터 저장소 
 
 ## Vector Store 특징
 
-1. **FAISS는 더 이상 "SQLite 임베디드 백엔드(외부 DB 불필요)"가 아닙니다.** 이는 RHOAI 3.1 이하
-   기준입니다. **3.2부터는 인라인 FAISS도 파일/청크 메타데이터 저장에 PostgreSQL이 필수**로
-   바뀌었습니다(SQLite 기반 저장은 더 이상 프로덕션에 권장되지 않음). FAISS의 실제 차별점은
-   "벡터 인덱스(HNSW/Flat) 자체가 별도 벡터DB 파드 없이 llama-stack 파드 프로세스 메모리 안에서
-   동작한다"는 것입니다 — `manifests/21-faiss-llamastack.yaml`에는 벡터 저장소용 Deployment가
-   없고 메타데이터용 `faiss-postgres`만 있다는 점으로 확인할 수 있습니다.
+1. RHOAI 3.2부터 FAISS는 메타데이터 저장을 위해 PostgreSQL이 필수입니다. FAISS의 핵심 차별점은 외부 벡터DB 파드 없이 llama-stack 프로세스 메모리 내에서 직접 벡터 인덱스를 처리한다는 점입니다.
 2. **Qdrant는 Inline을 지원하지 않습니다.** 반드시 remote(원격) 서비스로 배포해야 하며, RHOAI
    3.4에서 Technology Preview 상태입니다.
 
@@ -26,7 +21,8 @@ Red Hat OpenShift AI(RHOAI) 3.4의 Llama Stack이 지원하는 벡터 저장소 
 
 ```
 rag-support-demo (네임스페이스)
-├── inference-model-secret          # 실제 LLM 추론은 쓰지 않는 더미 값 (아래 참고)
+├── inference-model-secret          # INFERENCE_MODEL/VLLM_URL → 아래 qwen-vllm
+├── qwen-vllm (Deployment+Service+PVC, GPU 1장) # 공용 추론: Qwen2.5-3B-Instruct
 ├── ① pgvector 트랙
 │   ├── pgvector-postgres (Deployment+Service+PVC+Secret, pgvector 확장 사전 설치)
 │   └── LlamaStackDistribution/vs-pgvector  (ENABLE_PGVECTOR=true)
@@ -42,30 +38,23 @@ rag-support-demo (네임스페이스)
 세 트랙 모두 임베딩은 `ENABLE_SENTENCE_TRANSFORMERS=true` (인라인 sentence-transformers,
 `nomic-ai/nomic-embed-text-v1.5`)로 동일하게 맞춰서, **벡터 저장소 종류만 변수로 남깁니다.**
 
+추론(생성)도 세 트랙이 공용 `qwen-vllm`(Qwen2.5-3B-Instruct, vLLM, GPU 1장) 하나를 같이 씁니다 —
+`manifests/40-qwen-vllm.yaml`로 배포하고, `inference-model-secret`의 `INFERENCE_MODEL`/`VLLM_URL`을
+이 서비스로 채워서 세 `LlamaStackDistribution`이 전부 같은 모델로 실제 답변을 생성합니다.
+
 위 다이어그램의 인터랙티브 버전(요청 흐름 설명, 리소스 이름 표 포함)은
 [`docs/architecture.html`](docs/architecture.html)에서 브라우저로 열어볼 수 있습니다.
 
+### Llama Stack이 필요한 이유
+
+애플리케이션 코드(`webapp/app.py`, `scripts/*.py`)는 pgvector·FAISS·Qdrant·vLLM을 직접 모릅니다 —
+**Llama Stack 하나**가 그 넷을 provider로 숨기고, 코드는 `vector_stores.search(...)`와
+`chat.completions.create(...)` 두 호출만 압니다. 애플리케이션 코드는 Llama Stack으로 백엔드를
+추상화할 수 있습니다.
+
 ### `distribution.name: rh-dev`란?
 
-세 `LlamaStackDistribution` CR 모두 `spec.server.distribution.name: rh-dev`를 씁니다. Llama Stack에서
-**distribution**은 "어떤 provider 조합을 켤지"를 미리 정해놓은 세트로, 이름을 지정하면 오퍼레이터가
-그에 맞는 컨테이너 이미지 + 미리 baked-in된 `run.yaml` 템플릿을 가져다 씁니다. `rh-dev`는 커뮤니티
-업스트림의 `starter` 배포판과 별개로, **Red Hat이 RHOAI용으로 직접 큐레이션·인증한 배포판**입니다
-(실제 이미지: `registry.redhat.io/rhoai/odh-llama-stack-core-rhel9`). 이 안에 inference(`remote::vllm`),
-safety(`remote::trustyai_fms`), eval(`remote::trustyai_lmeval`), tool_runtime(brave-search,
-tavily-search, MCP 등) provider가 이미 정의돼 있고, 우리는 그중 vector_io 관련 환경변수
-(`ENABLE_PGVECTOR`/`ENABLE_FAISS`/`ENABLE_QDRANT`)만 트랙별로 다르게 켠 것입니다. ("dev"가 정확히
-무엇을 뜻하는지는 공식 문서에서 명시적으로 밝히지 않아 확인된 사실은 아니며, RHOAI 3.4에서
-Llama Stack 자체가 아직 Technology Preview 단계인 것과 관련 있어 보인다는 정도의 추정입니다.)
-
-### 왜 실제 LLM 추론(vLLM)을 쓰지 않나요?
-
-이 데모는 벡터 저장소(vector_io API — 문서 업로드/청킹/임베딩/검색)만 검증하며 채팅/생성은
-호출하지 않습니다. `rh-dev` 배포판은 부팅 시 inference API도 함께 등록하지만, llama-stack은
-그 값에 대해 부팅 시 연결 확인을 하지 않으므로(`provider.health == "Not Implemented"`) 존재하지
-않는 더미 `VLLM_URL`을 넣어도 파드는 정상적으로 Ready가 됩니다. 별도로 vLLM을 새로 띄우거나
-다른 프로젝트의 vLLM을 재사용할 필요가 없습니다 — 이 클러스터는 GPU가 2장뿐인 샌드박스라
-그 편이 안전합니다.
+LlamaStackDistribution CR의 spec.server.distribution.name: rh-dev는 Red Hat이 RHOAI용으로 인증한 배포판 이미지(odh-llama-stack-core-rhel9)를 사용하도록 지정되었습니다. 이 배포판에는 주요 Provider(Inference, Safety, Eval 등)가 미리 정의되어 있어, 트랙별로 필요한 벡터 IO 환경변수만 켜서 구성한 것입니다.
 
 ## 배포 방법
 
@@ -149,7 +138,9 @@ URL을 얻습니다 — VPN 불필요, 일반 브라우저로 접속). 배포가
 ```
 
 페이지에 질의를 입력하면 pgvector(vector 모드), FAISS(vector 모드), Qdrant(vector/keyword/hybrid
-탭 전환 가능) 결과를 카드 3개로 동시에 비교해서 보여줍니다. 백엔드는 `scripts/common.py`와 동일한
+탭 전환 가능) 검색 결과를 카드 3개로 동시에 비교해서 보여주고, 각 카드는 검색된 상위 문서를 근거로
+공용 `qwen-vllm`이 생성한 실제 답변도 함께 보여줍니다(Qdrant는 hybrid 모드 결과를 근거로 사용) —
+즉 세 트랙 모두 완전한 RAG(검색+생성) 파이프라인입니다. 백엔드는 `scripts/common.py`와 동일한
 로직(같은 이름 `support-docs-ko`의 vector store를 찾아 재사용, 임베딩 모델 자동 탐지)을
 `webapp/app.py`에 자체 포함하고 있습니다.
 
@@ -244,6 +235,15 @@ default_chunk_size_tokens: 512`). 검색 정확도나 벡터 저장소 동작 �
   다시 성공하기까지 10분 넘게 걸릴 수 있습니다(그 사이엔 TLS handshake timeout → EOF → "must
   provide credentials" 순으로 에러가 바뀌며 서서히 살아납니다). PVC 데이터는 EBS라 재시작해도
   보존됩니다 — 실제로 이 데모의 적재된 문서 30건(3트랙×10건)도 그대로 남아 있었습니다.
+- **qwen-vllm이 `PermissionError: [Errno 13] Permission denied: '/.cache'`로 크래시**: `HOME`
+  환경변수가 없으면(OpenShift 컨테이너 기본값은 `/`) vllm/flashinfer가 `/.cache/...` 아래에
+  캐시를 쓰려다 restricted SCC의 임의 비루트 UID 때문에 권한 오류로 죽습니다. `HOME`을 PVC
+  마운트 경로(`/data/hf-cache`)로 명시해서 해결했습니다 — Qdrant 때와 같은 종류의 문제입니다.
+- **`Model 'qwen2.5-3b' not found`(chat.completions 호출 시)**: llama-stack은 `/v1/models`에
+  provider_id를 접두한 전체 id로 모델을 등록합니다(`vllm-inference/qwen2.5-3b`). `INFERENCE_MODEL`
+  env var에는 짧은 이름(`qwen2.5-3b`)을 쓰지만, `chat.completions.create(model=...)` 호출에는
+  반드시 `client.models.list()`로 확인한 전체 id를 넘겨야 합니다(`webapp/app.py`의
+  `MODEL_NAME` 참고).
 
 ## 클러스터 정리
 

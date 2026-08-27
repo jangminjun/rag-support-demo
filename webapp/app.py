@@ -1,8 +1,9 @@
 """OpenShift AI 3.4 벡터 저장소 3종 비교 챗 UI.
 
-브라우저에서 질의를 입력하면 pgvector / FAISS / Qdrant 3개 트랙에 동시에 검색을 날려
-결과를 나란히 비교해서 보여준다. 문서 적재는 scripts/ingest.py로 이미 끝난 상태를 전제로
-같은 이름("support-docs-ko")의 vector store를 찾아 재사용한다.
+브라우저에서 질의를 입력하면 pgvector / FAISS / Qdrant 3개 트랙에 동시에 검색을 날리고,
+각 트랙의 검색 결과를 근거로 Qwen2.5-3B-Instruct(vLLM)가 실제 답변까지 생성하는 RAG 데모.
+문서 적재는 scripts/ingest.py로 이미 끝난 상태를 전제로 같은 이름("support-docs-ko")의
+vector store를 찾아 재사용한다.
 """
 from __future__ import annotations
 
@@ -16,12 +17,18 @@ from pydantic import BaseModel
 from llama_stack_client import LlamaStackClient
 
 VECTOR_STORE_NAME = "support-docs-ko"
+# llama-stack은 /v1/chat/completions에서 provider_id로 접두된 전체 id를 요구한다
+# (짧은 이름 "qwen2.5-3b"만 넣으면 404 Model not found).
+MODEL_NAME = "vllm-inference/qwen2.5-3b"
 
 TRACKS = {
     "pgvector": {"env": "PGVECTOR_LLS_URL", "label": "① pgvector", "modes": ["vector"]},
     "faiss": {"env": "FAISS_LLS_URL", "label": "② FAISS", "modes": ["vector"]},
     "qdrant": {"env": "QDRANT_LLS_URL", "label": "③ Qdrant", "modes": ["vector", "keyword", "hybrid"]},
 }
+
+# 답변 생성에 사용할 검색 모드 - Qdrant는 하이브리드가 가장 완전한 신호이므로 이걸 근거로 쓴다.
+PRIMARY_MODE = {"pgvector": "vector", "faiss": "vector", "qdrant": "hybrid"}
 
 app = FastAPI()
 
@@ -75,6 +82,27 @@ def format_results(results) -> list[dict]:
     return out
 
 
+def generate_answer(client: LlamaStackClient, query: str, results: list[dict]) -> tuple[str, float]:
+    """검색 결과 상위 몇 건을 근거로 Qwen2.5-3B-Instruct에게 답변을 생성시킨다."""
+    context = "\n\n".join(f"[{r['filename']}] {r['text']}" for r in results[:3])
+    prompt = (
+        "다음은 고객지원 문서에서 검색된 내용입니다.\n\n"
+        f"{context}\n\n"
+        "위 내용만 근거로 삼아 아래 질문에 한국어로 간결하게 답변하세요. "
+        "문서에 없는 내용은 모른다고 답하세요.\n\n"
+        f"질문: {query}"
+    )
+    start = time.perf_counter()
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=300,
+        temperature=0.2,
+    )
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+    return response.choices[0].message.content.strip(), elapsed_ms
+
+
 class SearchRequest(BaseModel):
     query: str
 
@@ -108,6 +136,14 @@ def search(req: SearchRequest) -> JSONResponse:
                 }
             except Exception as e:  # noqa: BLE001
                 response[track]["modes"][mode] = {"error": f"{type(e).__name__}: {e}"}
+
+        primary = response[track]["modes"].get(PRIMARY_MODE[track])
+        if primary and "results" in primary:
+            try:
+                answer, gen_ms = generate_answer(client, query, primary["results"])
+                response[track]["answer"] = {"text": answer, "elapsed_ms": gen_ms}
+            except Exception as e:  # noqa: BLE001
+                response[track]["answer"] = {"error": f"{type(e).__name__}: {e}"}
 
     return JSONResponse(response)
 
@@ -165,11 +201,18 @@ INDEX_HTML = r"""
   .result .snippet { color: #666; margin-top: 2px; }
   .error { color: #d33; font-size: 13px; }
   .empty { color: #999; font-size: 13px; }
+  .answer {
+    background: #f0f0fb; border: 1px solid #dcdcf5; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 12px;
+  }
+  .answer-label { font-size: 11px; color: #6366f1; font-weight: 600; margin-bottom: 4px; }
+  .answer-text { font-size: 13.5px; color: #333; line-height: 1.5; }
+  .answer-error { color: #d33; font-size: 12.5px; }
 </style>
 </head>
 <body>
   <h1>벡터 저장소 3종 비교 — pgvector / FAISS / Qdrant</h1>
-  <div class="subtitle">같은 질의를 동시에 던져 OpenShift AI 3.4가 지원하는 3개 vector_io 백엔드의 검색 결과를 비교합니다.</div>
+  <div class="subtitle">같은 질의를 동시에 던져 검색 결과를 비교하고, 각 트랙이 검색된 문서를 근거로 Qwen2.5-3B가 생성한 실제 답변까지 보여줍니다 (생성 포함, 응답까지 최대 30초 정도 걸릴 수 있습니다).</div>
 
   <div class="search-bar">
     <input id="query" type="text" placeholder="예: 배송비 환불 규정이 궁금해요" />
@@ -227,6 +270,18 @@ function renderResults(list) {
     .join("");
 }
 
+function renderAnswer(meta, note) {
+  if (!meta.answer) return "";
+  if (meta.answer.error) {
+    return '<div class="answer answer-error">답변 생성 실패: ' + meta.answer.error + "</div>";
+  }
+  const label = "생성된 답변" + (note ? " (" + note + " 근거)" : "") + " · " + meta.answer.elapsed_ms + "ms";
+  return (
+    '<div class="answer"><div class="answer-label">' + label + "</div>" +
+    '<div class="answer-text">' + meta.answer.text + "</div></div>"
+  );
+}
+
 function renderTrackCard(key, data) {
   const meta = data[key];
   if (!meta) return '<div class="card"><h2>' + key + '</h2><div class="empty">-</div></div>';
@@ -238,6 +293,7 @@ function renderTrackCard(key, data) {
     if (mode.error) return '<div class="card"><h2>' + meta.label + '</h2><div class="error">' + mode.error + "</div></div>";
     return (
       '<div class="card"><h2>' + meta.label + "</h2>" +
+      renderAnswer(meta) +
       '<div class="meta">search_mode=vector · ' + mode.elapsed_ms + "ms</div>" +
       renderResults(mode.results) +
       "</div>"
@@ -253,7 +309,11 @@ function renderTrackCard(key, data) {
   const body = mode.error
     ? '<div class="error">' + mode.error + "</div>"
     : '<div class="meta">' + mode.elapsed_ms + "ms</div>" + renderResults(mode.results);
-  return '<div class="card"><h2>' + meta.label + "</h2>" + '<div class="tabs">' + tabs + "</div>" + body + "</div>";
+  return (
+    '<div class="card"><h2>' + meta.label + "</h2>" +
+    renderAnswer(meta, "hybrid") +
+    '<div class="tabs">' + tabs + "</div>" + body + "</div>"
+  );
 }
 
 function setQdrantMode(m) {

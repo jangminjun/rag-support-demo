@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 610" role="img"
-  aria-label="브라우저와 터미널 두 클라이언트가 동일한 llama-stack API를 거쳐 pgvector, FAISS, Qdrant 세 벡터 저장소 트랙에 각각 연결되는 구조. pgvector는 하나의 PostgreSQL 인스턴스에 메타데이터와 벡터를 함께 저장하고, FAISS는 벡터 인덱스가 파드 프로세스 내부에만 있어 별도 벡터DB가 없으며, Qdrant는 메타데이터용 PostgreSQL과 벡터 전용 Qdrant 엔진을 별도로 둔다.">
+  aria-label="브라우저와 터미널 두 클라이언트가 동일한 llama-stack vector_io API를 거쳐, Llama Stack 레이어 안에서 각기 다른 provider를 실행하는 pgvector, FAISS, Qdrant 세 벡터 저장소 트랙에 각각 연결되는 구조. 같은 세 파드가 공용 Qwen2.5-3B(vLLM) 서비스에도 연결되어 실제 답변을 생성한다. pgvector는 하나의 PostgreSQL 인스턴스에 메타데이터와 벡터를 함께 저장하고, FAISS는 벡터 인덱스가 파드 프로세스 내부에만 있어 별도 벡터DB가 없으며, Qdrant는 메타데이터용 PostgreSQL과 벡터 전용 Qdrant 엔진을 별도로 둔다.">
   <style>
     :root {
       --bg: #f6f5f2;
@@ -67,6 +67,12 @@
     <text x="755" y="92" text-anchor="middle" font-weight="600">Job · demo-runner</text>
     <text x="755" y="107" text-anchor="middle" font-size="10.5" class="sub">1회성 실행 (ingest / demo_*.py)</text>
 
+    <!-- Shared inference backend -->
+    <rect x="960" y="16" width="180" height="64" rx="8" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.5" />
+    <text x="1050" y="38" text-anchor="middle" font-weight="600" font-size="11.5">qwen-vllm</text>
+    <text x="1050" y="54" text-anchor="middle" font-size="10" class="sub">Qwen2.5-3B-Instruct</text>
+    <text x="1050" y="68" text-anchor="middle" font-size="10" class="sub">vLLM · GPU 1장</text>
+
     <!-- drops to bus -->
     <line x1="385" y1="176" x2="385" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
     <line x1="755" y1="120" x2="755" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
@@ -85,6 +91,23 @@
     <line x1="575" y1="228" x2="575" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" color="var(--neutral-accent)" />
     <circle cx="955" cy="228" r="3" fill="var(--neutral-accent)" />
     <line x1="955" y1="228" x2="955" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" color="var(--neutral-accent)" />
+
+    <!-- Shared inference trunk (llama-stack pods → qwen-vllm) -->
+    <line x1="1050" y1="80" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+    <line x1="295" y1="298" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+    <text x="675" y="289" text-anchor="middle" font-size="11" fill="var(--neutral-accent)">공용 추론 · OpenAI 호환 /v1/chat/completions</text>
+    <circle cx="295" cy="298" r="3" fill="var(--neutral-accent)" />
+    <line x1="295" y1="298" x2="295" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
+    <circle cx="675" cy="298" r="3" fill="var(--neutral-accent)" />
+    <line x1="675" y1="298" x2="675" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
+    <circle cx="1050" cy="298" r="3" fill="var(--neutral-accent)" />
+    <line x1="1050" y1="298" x2="1050" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" color="var(--neutral-accent)" />
+
+    <!-- Llama Stack layer: shared eyebrow label + matching dashed outline per pod (same server, different provider) -->
+    <text x="575" y="318" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="0.03em" fill="var(--neutral-accent)">LLAMA STACK · rh-dev 배포판 — 아래 3개는 동일한 서버, provider만 다름</text>
+    <rect x="14" y="332" width="362" height="76" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
+    <rect x="394" y="332" width="362" height="152" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
+    <rect x="774" y="332" width="362" height="76" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
 
     <!-- ============ Column 1: pgvector ============ -->
     <text x="20" y="252" font-weight="700" fill="var(--track-pgvector)">① pgvector</text>

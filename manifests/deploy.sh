@@ -7,8 +7,11 @@ cd "$(dirname "$0")"
 echo "==> namespace"
 oc apply -f 00-namespace.yaml
 
-echo "==> inference placeholder secret (실제 LLM 추론 없이 vector_io만 검증)"
-oc apply -f 01-inference-placeholder-secret.yaml
+echo "==> inference secret (qwen-vllm을 가리킴)"
+oc apply -f 01-inference-secret.yaml
+
+echo "==> qwen-vllm (공용 추론 - 모델 다운로드/CUDA 그래프 컴파일로 수 분 소요, 먼저 띄워 놓고 진행)"
+oc apply -f 40-qwen-vllm.yaml
 
 echo "==> pgvector track"
 oc apply -f 10-pgvector-postgres.yaml
@@ -23,6 +26,9 @@ oc rollout status deployment/pgvector-postgres -n rag-support-demo --timeout=180
 oc rollout status deployment/faiss-postgres -n rag-support-demo --timeout=180s
 oc rollout status deployment/qdrant-postgres -n rag-support-demo --timeout=180s
 oc rollout status deployment/qdrant -n rag-support-demo --timeout=180s
+
+echo "==> qwen-vllm 준비 대기 (첫 실행은 이미지 pull ~20GB + 모델 다운로드 + CUDA 그래프 컴파일로 10분 이상 걸릴 수 있음)"
+oc rollout status deployment/qwen-vllm -n rag-support-demo --timeout=900s
 
 echo "==> LlamaStackDistribution 3종 배포"
 oc apply -f 11-pgvector-llamastack.yaml

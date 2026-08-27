@@ -220,17 +220,31 @@
     <p class="eyebrow">rag-support-demo · rag-support-demo namespace</p>
     <h1>벡터 저장소 3종 아키텍처</h1>
     <p class="lede">
-      OpenShift AI 3.4의 Llama Stack이 <code>pgvector</code> / <code>FAISS</code> / <code>Qdrant</code>
-      세 벡터 저장소를 어떻게 같은 API 뒤에서 갈아끼우는지 보여주는 다이어그램입니다.
-      브라우저(챗 UI)와 CLI(데모 스크립트) 두 클라이언트가 완전히 동일한 호출로 세 백엔드에 접근합니다.
+      OpenShift AI 3.4의 <strong>Llama Stack</strong>이 <code>pgvector</code> / <code>FAISS</code> /
+      <code>Qdrant</code> 세 벡터 저장소와 Qwen2.5-3B(vLLM) 추론을 어떻게 같은 API 뒤에서
+      갈아끼우는지 보여주는 다이어그램입니다. 브라우저(챗 UI)와 CLI(데모 스크립트) 두 클라이언트가
+      완전히 동일한 호출로 접근하고, 각 트랙은 검색된 문서를 근거로 실제 답변까지 생성합니다.
     </p>
   </header>
+
+  <section>
+    <h2>Llama Stack이 필요한 이유</h2>
+    <p style="max-width:78ch; font-size:14.5px;">
+      애플리케이션 코드(<code>webapp/app.py</code>, <code>scripts/*.py</code>)는 pgvector·FAISS·
+      Qdrant·vLLM을 직접 모릅니다 — <strong>Llama Stack 하나</strong>가 그 넷을 <code>vector_io</code> /
+      <code>inference</code> provider로 숨기고, 코드는 <code>vector_stores.search(...)</code>와
+      <code>chat.completions.create(...)</code> 두 호출만 압니다. 즉 애플리케이션 코드는 Llama
+      Stack으로 백엔드를 추상화할 수 있습니다. 그리고 이 데모의 목적 자체가
+      "OpenShift AI 3.4가 여러 벡터 저장소를 동등하게 지원하는가"이므로, Llama Stack은 이 데모가
+      고른 도구가 아니라 <strong>검증 대상 그 자체</strong>입니다.
+    </p>
+  </section>
 
   <section>
     <h2>토폴로지</h2>
     <div class="diagram-card">
       <figure>
-        <svg viewBox="0 0 1160 610" role="img" aria-label="브라우저와 터미널 두 클라이언트가 동일한 llama-stack API를 거쳐 pgvector, FAISS, Qdrant 세 벡터 저장소 트랙에 각각 연결되는 구조. pgvector는 하나의 PostgreSQL 인스턴스에 메타데이터와 벡터를 함께 저장하고, FAISS는 벡터 인덱스가 파드 프로세스 내부에만 있어 별도 벡터DB가 없으며, Qdrant는 메타데이터용 PostgreSQL과 벡터 전용 Qdrant 엔진을 별도로 둔다.">
+        <svg viewBox="0 0 1160 610" role="img" aria-label="브라우저와 터미널 두 클라이언트가 동일한 llama-stack vector_io API를 거쳐, Llama Stack 레이어 안에서 각기 다른 provider를 실행하는 pgvector, FAISS, Qdrant 세 벡터 저장소 트랙에 각각 연결되는 구조. 같은 세 파드가 공용 Qwen2.5-3B(vLLM) 서비스에도 연결되어 실제 답변을 생성한다. pgvector는 하나의 PostgreSQL 인스턴스에 메타데이터와 벡터를 함께 저장하고, FAISS는 벡터 인덱스가 파드 프로세스 내부에만 있어 별도 벡터DB가 없으며, Qdrant는 메타데이터용 PostgreSQL과 벡터 전용 Qdrant 엔진을 별도로 둔다.">
           <defs>
             <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
@@ -262,6 +276,12 @@
             <text x="755" y="92" text-anchor="middle" font-weight="600">Job · demo-runner</text>
             <text x="755" y="107" text-anchor="middle" font-size="10.5" fill="var(--text-secondary)" color="var(--text-secondary)">1회성 실행 (ingest / demo_*.py)</text>
 
+            <!-- Shared inference backend -->
+            <rect x="960" y="16" width="180" height="64" rx="8" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.5" />
+            <text x="1050" y="38" text-anchor="middle" font-weight="600" font-size="11.5">qwen-vllm</text>
+            <text x="1050" y="54" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">Qwen2.5-3B-Instruct</text>
+            <text x="1050" y="68" text-anchor="middle" font-size="10" fill="var(--text-secondary)" color="var(--text-secondary)">vLLM · GPU 1장</text>
+
             <!-- drops to bus -->
             <line x1="385" y1="176" x2="385" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
             <line x1="755" y1="120" x2="755" y2="228" stroke="var(--neutral-accent)" stroke-width="1.5" />
@@ -280,6 +300,23 @@
             <line x1="575" y1="228" x2="575" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" />
             <circle cx="955" cy="228" r="3" fill="var(--neutral-accent)" />
             <line x1="955" y1="228" x2="955" y2="336" stroke="var(--neutral-accent)" stroke-width="2" marker-end="url(#arrow)" />
+
+            <!-- Shared inference trunk (llama-stack pods → qwen-vllm) -->
+            <line x1="1050" y1="80" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <line x1="295" y1="298" x2="1050" y2="298" stroke="var(--neutral-accent)" stroke-width="1.5" />
+            <text x="675" y="289" text-anchor="middle" font-size="11" fill="var(--neutral-accent)" color="var(--neutral-accent)">공용 추론 · OpenAI 호환 /v1/chat/completions</text>
+            <circle cx="295" cy="298" r="3" fill="var(--neutral-accent)" />
+            <line x1="295" y1="298" x2="295" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <circle cx="675" cy="298" r="3" fill="var(--neutral-accent)" />
+            <line x1="675" y1="298" x2="675" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" />
+            <circle cx="1050" cy="298" r="3" fill="var(--neutral-accent)" />
+            <line x1="1050" y1="298" x2="1050" y2="340" stroke="var(--neutral-accent)" stroke-width="1.5" marker-end="url(#arrow)" />
+
+            <!-- Llama Stack layer: shared eyebrow label + matching dashed outline per pod (same server, different provider) -->
+            <text x="575" y="318" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="0.03em" fill="var(--neutral-accent)" color="var(--neutral-accent)">LLAMA STACK · rh-dev 배포판 — 아래 3개는 동일한 서버, provider만 다름</text>
+            <rect x="14" y="332" width="362" height="76" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
+            <rect x="394" y="332" width="362" height="152" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
+            <rect x="774" y="332" width="362" height="76" rx="10" fill="none" stroke="var(--neutral-accent)" stroke-width="1.25" stroke-dasharray="5 4" />
 
             <!-- ============ Column 1: pgvector ============ -->
             <text x="20" y="252" font-weight="700" fill="var(--track-pgvector)" color="var(--track-pgvector)">① pgvector</text>
@@ -349,8 +386,11 @@
           가느냐만 배포 설정(<code>ENABLE_PGVECTOR</code> / <code>ENABLE_FAISS</code> /
           <code>ENABLE_QDRANT</code>)으로 갈립니다. FAISS만 벡터 인덱스가 파드 내부에 있어 전용
           벡터DB가 없고, Qdrant만 <code>search_mode</code>로 keyword·hybrid까지 지원합니다.
-          세 트랙 모두 <code>INFERENCE_MODEL</code>/<code>VLLM_URL</code>은 실제로 호출되지 않는
-          더미 값입니다(이 데모는 vector_io만 검증).
+          점선으로 묶은 세 파드가 바로 Llama Stack 서버 자체입니다 — 셋 다 같은 <code>rh-dev</code>
+          이미지로 뜬 동일한 서버 구현이고, 활성화된 <code>vector_io</code> provider만 다릅니다.
+          같은 세 파드가 <code>INFERENCE_MODEL=qwen2.5-3b</code> / <code>VLLM_URL</code>로 공용
+          <code>qwen-vllm</code>에도 연결되어, 검색된 문서를 근거로 <code>chat.completions</code>
+          호출까지 해서 실제 답변을 생성합니다.
         </figcaption>
       </figure>
     </div>
@@ -361,6 +401,7 @@
       <div class="legend-item"><span class="swatch" style="background:var(--track-pgvector)"></span> pgvector 트랙</div>
       <div class="legend-item"><span class="swatch" style="background:var(--track-faiss)"></span> FAISS 트랙</div>
       <div class="legend-item"><span class="swatch" style="background:var(--track-qdrant)"></span> Qdrant 트랙</div>
+      <div class="legend-item"><span class="line-sample dashed" style="border-top-color:var(--neutral-accent)"></span> Llama Stack 레이어 경계</div>
     </div>
   </section>
 
@@ -368,13 +409,17 @@
     <h2>요청 흐름 — 브라우저에서 질의 하나를 입력했을 때</h2>
     <ol class="flow">
       <li><div class="step-body"><strong>chat-ui</strong>가 <code>/api/search</code>로 질의를 받는다.</div></li>
-      <li><div class="step-body">같은 함수가 <strong>pgvector / FAISS / Qdrant</strong> 세 서비스에 동시에
-        <code>vector_stores.search(search_mode=...)</code>를 호출한다 — 코드는 세 트랙 모두 동일하다.</div></li>
+      <li><div class="step-body">같은 함수가 <strong>pgvector / FAISS / Qdrant</strong> 세 서비스(모두 같은
+        Llama Stack 서버)에 동시에 <code>vector_stores.search(search_mode=...)</code>를 호출한다 —
+        코드는 세 트랙 모두 동일하다.</div></li>
       <li><div class="step-body">각 트랙은 자기 백엔드에서 검색한다: pgvector는 SQL로,
         FAISS는 파드 내부 인덱스에서, Qdrant는 자신의 엔진에서(요청한 모드가 vector면 벡터만,
         keyword/hybrid면 어휘 점수까지 결합).</div></li>
-      <li><div class="step-body">세 결과를 카드 3개로 모아 브라우저에 반환한다 — Qdrant 카드는
-        vector/keyword/hybrid 탭을 눌러 같은 데이터를 다른 모드로 다시 볼 수 있다.</div></li>
+      <li><div class="step-body">각 트랙은 검색된 상위 문서를 프롬프트에 넣어 같은
+        <strong>qwen-vllm</strong>에 <code>chat.completions.create(...)</code>를 호출, 실제 답변을
+        생성한다.</div></li>
+      <li><div class="step-body">검색 결과 + 생성된 답변을 카드 3개로 모아 브라우저에 반환한다 —
+        Qdrant 카드는 vector/keyword/hybrid 탭을 눌러 같은 데이터를 다른 모드로 다시 볼 수 있다.</div></li>
     </ol>
   </section>
 
@@ -412,6 +457,13 @@
             <td class="mono">remote::qdrant</td>
             <td class="mono">qdrant:6333</td>
             <td>vector · keyword · hybrid</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--neutral-accent)"></span>추론(공용)</td>
+            <td class="mono">qwen-vllm</td>
+            <td class="mono">remote::vllm</td>
+            <td class="mono">qwen-vllm:8000 (model: qwen2.5-3b)</td>
+            <td>chat.completions</td>
           </tr>
         </tbody>
       </table>
